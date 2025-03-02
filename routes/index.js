@@ -77,19 +77,22 @@ router.get('/prodUpload', function (req, res) {
 /* ===========================
         Product Upload (POST)
    =========================== */
+/* ===========================
+        Product Upload (POST)
+   =========================== */
 router.post(
   '/uploadProduct',
   isAdminLoggedIn,
   upload.single('image'),
   async (req, res) => {
-    const { name, category, description } = req.body;
+    const { name, price, description } = req.body;
 
     try {
       const newProduct = new Product({
-        productID: uuidv4(), // Generate unique product ID
+        productID: uuidv4(),
         name,
-        image: req.file ? `/uploads/${req.file.filename}` : '', // Store image path
-        category,
+        image: `/uploads/${req.file.filename}`,
+        price, // Changed from category to price
         description,
       });
 
