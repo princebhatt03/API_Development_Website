@@ -14,10 +14,30 @@ isLoggedIn = (req, res, next) => {
 };
 
 // Home GET Route
-router.get('/', isLoggedIn, function (req, res, next) {
-  const success = req.flash('success');
-  const error = req.flash('error');
-  res.render('index', { success, error });
+router.get('/', isLoggedIn, async function (req, res, next) {
+  try {
+    const success = req.flash('success');
+    const error = req.flash('error');
+
+    // Fetch products from the database
+    const products = await Product.find();
+
+    res.render('index', {
+      success,
+      error,
+      user: req.session.user || null,
+      products, // Pass products to the view
+    });
+  } catch (err) {
+    console.error('Error fetching products:', err);
+
+    res.render('index', {
+      success: req.flash('success'),
+      error: req.flash('error'),
+      user: req.session.user || null,
+      products: [], // Pass an empty array if there's an error
+    });
+  }
 });
 
 // Products Upload Route
