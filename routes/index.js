@@ -3,9 +3,11 @@ var router = express.Router();
 const mongoose = require('../db/db');
 const bcrypt = require('bcryptjs');
 const User = require('../models/user.model');
+const Admin = require('../models/admin.model');
+const Product = require('../models/products.model'); // Assuming you have a Product model
 
-// Check wheather the user is logged in or not...
-isLoggedIn = (req, res, next) => {
+// Middleware: Check if User is Logged In
+const isLoggedIn = (req, res, next) => {
   if (req.session.user) {
     return next();
   }
@@ -13,7 +15,18 @@ isLoggedIn = (req, res, next) => {
   res.redirect('/userLogin');
 };
 
-// Home GET Route
+// Middleware: Check if Admin is Logged In
+const isAdminLoggedIn = (req, res, next) => {
+  if (req.session.admin) {
+    return next();
+  }
+  req.flash('error_msg', 'Please log in as Admin');
+  res.redirect('/adminLogin');
+};
+
+/* ===========================
+        Home Route (GET)
+   =========================== */
 router.get('/', isLoggedIn, async function (req, res, next) {
   try {
     const success = req.flash('success');
@@ -40,19 +53,26 @@ router.get('/', isLoggedIn, async function (req, res, next) {
   }
 });
 
-// Products Upload Route
+/* ===========================
+        Product Upload (GET)
+   =========================== */
 router.get('/prodUpload', function (req, res) {
   res.render('products/productsUpload');
 });
 
-// User Routes
-router.get('/userLogin', function (req, res, next) {
+/* ===========================
+        User Authentication Routes
+   =========================== */
+
+// User Login Page (GET)
+router.get('/userLogin', function (req, res) {
   const success = req.flash('success');
   const error = req.flash('error');
   res.render('user/userLogin', { success, error });
 });
 
-router.get('/userRegister', function (req, res, next) {
+// User Register Page (GET)
+router.get('/userRegister', function (req, res) {
   const success = req.flash('success');
   const error = req.flash('error');
   res.render('user/userRegister', { success, error });
@@ -62,56 +82,155 @@ router.get('/userRegister', function (req, res, next) {
 router.post('/register', async (req, res) => {
   const { name, username, email, password } = req.body;
 
-  const existingUser = await User.findOne({ username });
-  if (existingUser) {
-    req.flash('error', 'Username already exists');
-    return res.redirect('/userRegister');
+  try {
+    const existingUser = await User.findOne({ username });
+
+    if (existingUser) {
+      req.flash('error', 'Username already exists');
+      return res.redirect('/userRegister');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({
+      name,
+      username,
+      email,
+      password: hashedPassword,
+    });
+
+    await newUser.save();
+
+    req.flash('success', 'Registration successful! Please log in.');
+    res.redirect('/userLogin');
+  } catch (err) {
+    console.error('User registration error:', err);
+    req.flash('error', 'Something went wrong, please try again.');
+    res.redirect('/userRegister');
   }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = new User({ name, username, email, password: hashedPassword });
-
-  await newUser.save();
-
-  req.flash('success', 'Registration successful! Please log in.');
-  res.redirect('/userLogin');
 });
 
+// User Login (POST)
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
-  // Find user in the database
-  const user = await User.findOne({ username });
+  try {
+    const user = await User.findOne({ username });
 
-  if (!user) {
-    req.flash('error', 'Invalid Username or Password');
-    return res.redirect('/userLogin');
+    if (!user) {
+      req.flash('error', 'Invalid Username or Password');
+      return res.redirect('/userLogin');
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      req.flash('error', 'Invalid Username or Password');
+      return res.redirect('/userLogin');
+    }
+
+    req.session.user = { id: user._id, username: user.username };
+
+    req.flash('success', 'Login successful!');
+    res.redirect('/');
+  } catch (err) {
+    console.error('User login error:', err);
+    req.flash('error', 'Something went wrong, please try again.');
+    res.redirect('/userLogin');
   }
-
-  // Compare entered password with stored hashed password
-  const isMatch = await bcrypt.compare(password, user.password);
-
-  if (!isMatch) {
-    req.flash('error', 'Invalid Username or Password');
-    return res.redirect('/userLogin');
-  }
-
-  // If login is successful, store user session
-  req.session.user = { id: user._id, username: user.username };
-  req.flash('success', 'Login successful!');
-  res.redirect('/');
 });
 
-// Admin Routes
+/* ===========================
+        Admin Authentication Routes
+   =========================== */
+
+// Admin Login Page (GET)
 router.get('/adminLogin', function (req, res) {
-  res.render('admin/adminLogin');
+  const success = req.flash('success');
+  const error = req.flash('error');
+  res.render('admin/adminLogin', { success, error });
 });
 
+// Admin Register Page (GET)
 router.get('/adminRegister', function (req, res) {
-  res.render('admin/adminRegister');
+  const success = req.flash('success');
+  const error = req.flash('error');
+  res.render('admin/adminRegister', { success, error });
 });
 
-// Logout Route for User
+// Admin Register (POST)
+router.post('/admin/register', async (req, res) => {
+  const { name, adminUserName, adminId, email, password } = req.body;
+
+  try {
+    const existingAdmin = await Admin.findOne({
+      $or: [{ adminUserName }, { adminId }],
+    });
+
+    if (existingAdmin) {
+      req.flash('error', 'Admin username or ID is already taken.');
+      return res.redirect('/adminRegister');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newAdmin = new Admin({
+      name,
+      adminUserName,
+      adminId,
+      email,
+      password: hashedPassword,
+    });
+
+    await newAdmin.save();
+
+    req.flash('success', 'Admin registered successfully! Please log in.');
+    res.redirect('/adminLogin');
+  } catch (err) {
+    console.error('Admin registration error:', err);
+    req.flash('error', 'Something went wrong, please try again.');
+    res.redirect('/adminRegister');
+  }
+});
+
+router.get('/adminDashboard', function (req, res) {
+  res.render('admin/adminDashboard');
+});
+
+// Admin Login (POST)
+router.post('/admin/login', async (req, res) => {
+  const { adminId, adminUserName, password } = req.body;
+
+  try {
+    const admin = await Admin.findOne({ adminId, adminUserName });
+
+    if (!admin) {
+      req.flash('error', 'Invalid Admin ID, Username, or Password');
+      return res.redirect('/adminLogin');
+    }
+
+    const isMatch = await bcrypt.compare(password, admin.password);
+
+    if (!isMatch) {
+      req.flash('error', 'Invalid Admin ID, Username, or Password');
+      return res.redirect('/adminLogin');
+    }
+
+    req.session.admin = { id: admin._id, adminUserName: admin.adminUserName };
+
+    req.flash('success', 'Welcome, Admin!');
+    res.redirect('/adminDashboard');
+  } catch (err) {
+    console.error('Admin login error:', err);
+    req.flash('error', 'Something went wrong, please try again.');
+    res.redirect('/adminLogin');
+  }
+});
+
+/* ===========================
+        Logout Routes
+   =========================== */
+
+// User Logout (GET)
 router.get('/logout', (req, res) => {
   req.session.destroy(err => {
     if (err) {
@@ -120,6 +239,18 @@ router.get('/logout', (req, res) => {
     }
     res.clearCookie('connect.sid');
     res.redirect('/userLogin');
+  });
+});
+
+// Admin Logout (GET)
+router.get('/admin/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      console.log(err);
+      return res.redirect('/adminDashboard');
+    }
+    res.clearCookie('connect.sid');
+    res.redirect('/adminLogin');
   });
 });
 
