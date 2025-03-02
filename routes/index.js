@@ -4,7 +4,21 @@ const mongoose = require('../db/db');
 const bcrypt = require('bcryptjs');
 const User = require('../models/user.model');
 const Admin = require('../models/admin.model');
-const Product = require('../models/products.model'); // Assuming you have a Product model
+const Product = require('../models/products.model');
+const { v4: uuidv4 } = require('uuid');
+const multer = require('multer');
+
+// Configure Storage for Multer
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'public/uploads/'); // Store images in public/uploads folder
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname); // Rename file
+  },
+});
+
+const upload = multer({ storage: storage });
 
 // Middleware: Check if User is Logged In
 const isLoggedIn = (req, res, next) => {
@@ -59,6 +73,36 @@ router.get('/', isLoggedIn, async function (req, res, next) {
 router.get('/prodUpload', function (req, res) {
   res.render('products/productsUpload');
 });
+
+/* ===========================
+        Product Upload (POST)
+   =========================== */
+router.post(
+  '/uploadProduct',
+  isAdminLoggedIn,
+  upload.single('image'),
+  async (req, res) => {
+    const { name, category, description } = req.body;
+
+    try {
+      const newProduct = new Product({
+        productID: uuidv4(), // Generate unique product ID
+        name,
+        image: req.file ? `/uploads/${req.file.filename}` : '', // Store image path
+        category,
+        description,
+      });
+
+      await newProduct.save();
+      req.flash('success', 'Product uploaded successfully!');
+      res.redirect('/adminDashboard');
+    } catch (err) {
+      console.error('Error uploading product:', err);
+      req.flash('error', 'Failed to upload product. Try again!');
+      res.redirect('/adminDashboard');
+    }
+  }
+);
 
 /* ===========================
         User Authentication Routes
@@ -191,9 +235,14 @@ router.post('/admin/register', async (req, res) => {
     res.redirect('/adminRegister');
   }
 });
-
-router.get('/adminDashboard', function (req, res) {
-  res.render('admin/adminDashboard');
+router.get('/adminDashboard', isAdminLoggedIn, async (req, res) => {
+  try {
+    const products = await Product.find();
+    res.render('admin/adminDashboard', { products }); // Passing products to the view
+  } catch (err) {
+    console.error('Error fetching products:', err);
+    res.render('admin/adminDashboard', { products: [] }); // Pass empty array in case of error
+  }
 });
 
 // Admin Login (POST)
