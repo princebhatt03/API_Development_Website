@@ -87,32 +87,32 @@ router.get('/prodUpload', function (req, res) {
 /* ===========================
         Product Upload (POST)
    =========================== */
-router.post(
-  '/uploadProduct',
-  isAdminLoggedIn,
-  upload.single('image'),
-  async (req, res) => {
-    const { name, price, description } = req.body;
+// router.post(
+//   '/uploadProduct',
+//   isAdminLoggedIn,
+//   upload.single('image'),
+//   async (req, res) => {
+//     const { name, price, description } = req.body;
 
-    try {
-      const newProduct = new Product({
-        productID: uuidv4(),
-        name,
-        image: `/uploads/${req.file.filename}`,
-        price, // Changed from category to price
-        description,
-      });
+//     try {
+//       const newProduct = new Product({
+//         productID: uuidv4(),
+//         name,
+//         image: `/uploads/${req.file.filename}`,
+//         price, // Changed from category to price
+//         description,
+//       });
 
-      await newProduct.save();
-      req.flash('success', 'Product uploaded successfully!');
-      res.redirect('/adminDashboard');
-    } catch (err) {
-      console.error('Error uploading product:', err);
-      req.flash('error', 'Failed to upload product. Try again!');
-      res.redirect('/adminDashboard');
-    }
-  }
-);
+//       await newProduct.save();
+//       req.flash('success', 'Product uploaded successfully!');
+//       res.redirect('/adminDashboard');
+//     } catch (err) {
+//       console.error('Error uploading product:', err);
+//       req.flash('error', 'Failed to upload product. Try again!');
+//       res.redirect('/adminDashboard');
+//     }
+//   }
+// );
 
 /* ===========================
         User Authentication Routes
@@ -245,15 +245,61 @@ router.post('/admin/register', async (req, res) => {
     res.redirect('/adminRegister');
   }
 });
+
+// Admin Dashboard (GET)
 router.get('/adminDashboard', isAdminLoggedIn, async (req, res) => {
   try {
-    const products = await Product.find();
-    res.render('admin/adminDashboard', { products }); // Passing products to the view
+    if (!req.session.admin) {
+      req.flash('error', 'Admin session not found. Please log in again.');
+      return res.redirect('/admin/login'); // Redirect to login page
+    }
+
+    const products = await Product.find({ adminId: req.session.admin.id });
+
+    res.render('admin/adminDashboard', {
+      products,
+      success: req.flash('success'),
+      error: req.flash('error'),
+    });
   } catch (err) {
     console.error('Error fetching products:', err);
-    res.render('admin/adminDashboard', { products: [] }); // Pass empty array in case of error
+    req.flash('error', 'Something went wrong while fetching products.');
+    res.redirect('/adminDashboard');
   }
 });
+
+// Upload Product (POST)
+router.post(
+  '/uploadProduct',
+  isAdminLoggedIn,
+  upload.single('image'),
+  async (req, res) => {
+    const { name, price, description } = req.body;
+
+    if (!req.file) {
+      req.flash('error', 'Please upload an image');
+      return res.redirect('/adminDashboard');
+    }
+
+    try {
+      const newProduct = new Product({
+        productID: uuidv4(),
+        name,
+        image: `/uploads/${req.file.filename}`,
+        price,
+        description,
+        adminId: req.session.admin.id,
+      });
+
+      await newProduct.save();
+      req.flash('success', 'Product uploaded successfully!');
+    } catch (err) {
+      console.error('Error uploading product:', err);
+      req.flash('error', 'Failed to upload product. Try again!');
+    }
+    res.redirect('/adminDashboard');
+  }
+);
 
 // Admin Login (POST)
 router.post('/admin/login', async (req, res) => {
