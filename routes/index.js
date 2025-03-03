@@ -46,6 +46,11 @@ router.get('/', isLoggedIn, async function (req, res, next) {
     const success = req.flash('success');
     const error = req.flash('error');
 
+    // Ensure cart is initialized in session
+    if (!req.session.cart) {
+      req.session.cart = [];
+    }
+
     // Fetch products from the database
     const products = await Product.find();
 
@@ -53,7 +58,8 @@ router.get('/', isLoggedIn, async function (req, res, next) {
       success,
       error,
       user: req.session.user || null,
-      products, // Pass products to the view
+      products,
+      cart: req.session.cart, // Pass cart to EJS
     });
   } catch (err) {
     console.error('Error fetching products:', err);
@@ -62,7 +68,8 @@ router.get('/', isLoggedIn, async function (req, res, next) {
       success: req.flash('success'),
       error: req.flash('error'),
       user: req.session.user || null,
-      products: [], // Pass an empty array if there's an error
+      products: [],
+      cart: [], // Ensure cart is always defined
     });
   }
 });
@@ -278,29 +285,81 @@ router.post('/admin/login', async (req, res) => {
   }
 });
 
+// Cart Page
+router.get('/cart', (req, res) => {
+  res.render('cart', { cart: req.session.cart });
+});
+
+// Add product to cart
+router.post('/add-to-cart', async (req, res) => {
+  const { productID } = req.body;
+  const product = await Product.findOne({ productID });
+
+  if (!product) {
+    req.flash('error_msg', 'Product not found.');
+    return res.redirect('/');
+  }
+
+  let cart = req.session.cart;
+  let existingProduct = cart.find(item => item.productID === productID);
+
+  if (existingProduct) {
+    existingProduct.quantity += 1;
+  } else {
+    cart.push({ ...product.toObject(), quantity: 1 });
+  }
+
+  req.session.cart = cart;
+  res.redirect('/cart');
+});
+
+// Increase quantity
+router.post('/increase/:id', (req, res) => {
+  let cart = req.session.cart;
+  let product = cart.find(item => item.productID === req.params.id);
+
+  if (product) {
+    product.quantity += 1;
+  }
+  res.redirect('/cart');
+});
+
+// Decrease quantity
+router.post('/decrease/:id', (req, res) => {
+  let cart = req.session.cart;
+  let product = cart.find(item => item.productID === req.params.id);
+
+  if (product) {
+    product.quantity -= 1;
+    if (product.quantity <= 0) {
+      req.session.cart = cart.filter(item => item.productID !== req.params.id);
+    }
+  }
+  res.redirect('/cart');
+});
+
+// Remove item
+router.post('/remove/:id', (req, res) => {
+  req.session.cart = req.session.cart.filter(
+    item => item.productID !== req.params.id
+  );
+  res.redirect('/cart');
+});
+
 /* ===========================
         Logout Routes
    =========================== */
-
-// User Logout (GET)
 router.get('/logout', (req, res) => {
   req.session.destroy(err => {
-    if (err) {
-      console.log(err);
-      return res.redirect('/');
-    }
+    if (err) console.log(err);
     res.clearCookie('connect.sid');
     res.redirect('/userLogin');
   });
 });
 
-// Admin Logout (GET)
 router.get('/admin/logout', (req, res) => {
   req.session.destroy(err => {
-    if (err) {
-      console.log(err);
-      return res.redirect('/adminDashboard');
-    }
+    if (err) console.log(err);
     res.clearCookie('connect.sid');
     res.redirect('/adminLogin');
   });

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0" />
+    <title>Shopping Cart</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+  </head>
+  <body class="bg-light">
+    <div class="container mt-5">
+      <h1 class="text-center">Shopping Cart</h1>
+
+      <% if (!cart || cart.length === 0) { %>
+      <div class="alert alert-warning text-center">Your cart is empty.</div>
+      <div class="text-center">
+        <a
+          href="/"
+          class="btn btn-primary"
+          >Back to Shopping</a
+        >
+      </div>
+      <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover mt-3">
+          <thead class="table-dark">
+            <tr>
+              <th>Image</th>
+              <th>Product</th>
+              <th>Price</th>
+              <th>Quantity</th>
+              <th>Total</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% cart.forEach(item => { %>
+            <tr>
+              <td>
+                <img
+                  src="<%= item.image %>"
+                  class="img-fluid rounded"
+                  width="50" />
+              </td>
+              <td><%= item.name %></td>
+              <td>₹<%= item.price %></td>
+              <td>
+                <form
+                  action="/increase/<%= item.productID %>"
+                  method="POST"
+                  class="d-inline">
+                  <button
+                    type="submit"
+                    class="btn btn-sm btn-success">
+                    +
+                  </button>
+                </form>
+                <span class="mx-2"><%= item.quantity %></span>
+                <form
+                  action="/decrease/<%= item.productID %>"
+                  method="POST"
+                  class="d-inline">
+                  <button
+                    type="submit"
+                    class="btn btn-sm btn-warning">
+                    -
+                  </button>
+                </form>
+              </td>
+              <td>₹<%= item.price * item.quantity %></td>
+              <td>
+                <form
+                  action="/remove/<%= item.productID %>"
+                  method="POST">
+                  <button
+                    type="submit"
+                    class="btn btn-sm btn-danger">
+                    Remove
+                  </button>
+                </form>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 class="text-end">
+        Total: ₹<%= cart.reduce((acc, item) => acc + (item.price *
+        item.quantity), 0) %>
+      </h2>
+
+      <div class="text-center mt-4">
+        <a
+          href="/"
+          class="btn btn-secondary"
+          >Continue Shopping</a
+        >
+        <button
+          onclick="checkout()"
+          class="btn btn-success">
+          Proceed to Checkout
+        </button>
+      </div>
+      <% } %>
+    </div>
+
+    <script>
+      function checkout() {
+        alert(
+          'Your order is being processed! Payment integration coming soon.'
+        );
+      }
+    </script>
+  </body>
+</html>
